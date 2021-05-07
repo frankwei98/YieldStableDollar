@@ -11,18 +11,19 @@ export interface BankInfo {
   finished: boolean;
 }
 
-export interface Bank extends  BankInfo {
+export interface Bank extends BankInfo {
   address: string;
   depositToken: ERC20;
   earnToken: ERC20;
+  bankDefinitionName: string;
 }
 
 export type TokenStat = {
-  priceInDAI: string;
+  priceInBUSD: string;
   totalSupply: string;
 };
 
 export type TreasuryAllocationTime = {
   prevAllocation: Date;
   nextAllocation: Date;
-}
+};

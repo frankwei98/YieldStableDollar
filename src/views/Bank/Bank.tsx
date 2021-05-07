@@ -17,11 +17,12 @@ import bankimg from '../../assets/img/bank.png';
 import PickaBank from '../../assets/img/PickaBank.png';
 import line from '../../assets/img/line.png';
 import buttonA from '../../assets/img/buttonA.png';
+import BetaWarning from '../../components/BetaWarning';
 
 const Bank: React.FC = () => {
   useEffect(() => window.scrollTo(0, 0));
 
-  const { bankId } = useParams();
+  const { bankId } = useParams<{ bankId: string }>();
   const bank = useBank(bankId);
 
   const { account } = useWallet();
@@ -70,11 +71,11 @@ const LPTokenHelpText: React.FC<{ bank: BankEntity }> = ({ bank }) => {
   let uniswapUrl: string;
   const { Cash, Share } = Config.deployments;
   if (bank.depositTokenName.includes('YSD')) {
-      pairName = 'YSD-DAI pair';
-      uniswapUrl = `${swapPrefix}/add/${Cash.address}/${Config.externalTokens.DAI[0]}`;
+      pairName = 'YSD-BUSD pair';
+      uniswapUrl = `${swapPrefix}/add/${Cash.address}/${Config.externalTokens.USDT[0]}`;
     } else {
-      pairName = 'YSS-DAI pair';
-      uniswapUrl = `${swapPrefix}/add/${Share.address}/${Config.externalTokens.DAI[0]}`;
+      pairName = 'YSS-BUSD pair';
+      uniswapUrl = `${swapPrefix}/add/${Share.address}/${Config.externalTokens.USDT[0]}`;
   }
   return (
     <StyledLink href={uniswapUrl} target="_blank">
@@ -100,11 +101,14 @@ const BankNotFound = () => {
 const UnlockWallet = () => {
   const { connect } = useWallet();
   return (
+    <>
+    <BetaWarning />
     <Center>
       <StyledBtn>
         <Button variant={'tertiary'} onClick={() => connect('injected')} text="Unlock Wallet"/>
       </StyledBtn>
-    </Center>
+      </Center>
+    </>
   );
 };
 

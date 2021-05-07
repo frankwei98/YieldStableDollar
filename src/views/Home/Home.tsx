@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import Page from '../../components/Page';
 import PageHeader from '../../components/PageHeader';
-import Spacer from '../../components/Spacer';
+// import Spacer from '../../components/Spacer';
 import HomeCard from './components/HomeCard';
 import { OverviewData } from './types';
 import useBasisCash from '../../hooks/useBasisCash';
@@ -10,6 +10,7 @@ import config from '../../config';
 import cyberchip from '../../assets/img/cyberchip.png';
 import WelcometoYSD from '../../assets/img/WelcometoYSD.png';
 import line from '../../assets/img/line.png';
+import BetaWarning from '../../components/BetaWarning';
 
 const Home: React.FC = () => {
   const basisCash = useBasisCash();
@@ -22,7 +23,7 @@ const Home: React.FC = () => {
       basisCash.getShareStat(),
     ]);
     if (Date.now() < config.bondLaunchesAt.getTime()) {
-      bond.priceInDAI = '-';
+      bond.priceInBUSD = '-';
     }
     setStats({ cash, bond, share });
   }, [basisCash, setStats]);
@@ -46,7 +47,8 @@ const Home: React.FC = () => {
         subtitle="Buy, sell, and provide liquidity for Yield Stable Dollar and Yield Stable Shares on Unisave"
         title="Welcome to Stable Dollar!"
       />
-      <Spacer size="md" />
+      {/* <Spacer size="md" /> */}
+      <BetaWarning />
       <CardWrapper>
         <HomeCard
           title="YSD"
@@ -56,18 +58,16 @@ const Home: React.FC = () => {
           address={cashAddr}
           stat={cash}
         />
-        <Spacer size="lg" />
         <HomeCard
           title="YSS"
-          symbol="YSB"
+          symbol="YSS"
           color="rgba(72, 225, 159, 0.5)"
           address={shareAddr}
           stat={share}
         />
-        <Spacer size="lg" />
         <HomeCard
           title="YSB"
-          symbol="YSS"
+          symbol="YSB"
           color="rgba(72, 225, 159, 0.5)"
           address={bondAddr}
           stat={bond}
@@ -78,12 +78,15 @@ const Home: React.FC = () => {
 };
 
 const CardWrapper = styled.div`
-  display: flex;
+  display: grid;
   justify-content: center;
+  grid-template-columns: repeat(3, 240px);
+  column-gap: 40px;
   width: 100%;
 
   @media (max-width: 768px) {
     width: 100%;
+    display: flex;
     flex-flow: column nowrap;
     align-items: center;
   }

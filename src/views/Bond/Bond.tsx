@@ -59,8 +59,8 @@ const Bond: React.FC = () => {
     },
     [basisCash, addTransaction, cashPrice],
   );
-  const cashIsOverpriced = useMemo(() => cashPrice.gt(utils.parseUnits("1", 18)), [cashPrice]);
-  const cashIsUnderPriced = useMemo(() => Number(bondStat?.priceInDAI) < 1.0, [bondStat]);
+  const cashIsOverpriced = useMemo(() => cashPrice.gt(utils.parseUnits("1", 6)), [cashPrice]);
+  const cashIsUnderPriced = useMemo(() => Number(bondStat?.priceInBUSD) < 1.0, [bondStat]);
 
   const isLaunched = Date.now() >= config.bondLaunchesAt.getTime();
   if (!isLaunched) {
@@ -110,7 +110,7 @@ const Bond: React.FC = () => {
                       ? 'YSD is over $1'
                       : cashIsUnderPriced
                       ? `${Math.floor(
-                          100 / Number(bondStat.priceInDAI) - 100,
+                          100 / Number(bondStat.priceInBUSD) - 100,
                         )}% return when YSD > $1`
                       : '-'
                   }
@@ -122,13 +122,13 @@ const Bond: React.FC = () => {
                 <ExchangeStat
                   tokenName="YSC"
                   description="Base Price (Last-Day TWAP)"
-                  price={getDisplayBalance(cashPrice, 18, 2)}
+                  price={getDisplayBalance(cashPrice, 6, 2)}
                 />
                 <Spacer size="md" />
                 <ExchangeStat
                   tokenName="YSB"
                   description="Current Price: (YSD)^2"
-                  price={bondStat?.priceInDAI || '-'}
+                  price={bondStat?.priceInBUSD || '-'}
                 />
               </StyledStatsWrapper>
               <StyledCardWrapper>
@@ -138,7 +138,7 @@ const Bond: React.FC = () => {
                   fromTokenName="Yield Stable Bond"
                   toToken={basisCash.YSD}
                   toTokenName="Yield Stable Dollar"
-                  priceDesc={`${getDisplayBalance(bondBalance)} YSB Available`}
+                  priceDesc={`${getDisplayBalance(bondBalance, 18, 4)} YSB Available`}
                   onExchange={handleRedeemBonds}
                   disabled={!bondStat || bondBalance.eq(0) || cashIsUnderPriced}
                 />

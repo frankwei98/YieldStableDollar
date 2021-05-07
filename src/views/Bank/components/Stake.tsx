@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import styled from 'styled-components';
 
 import Button from '../../../components/Button';
@@ -30,10 +30,9 @@ interface StakeProps {
 
 const Stake: React.FC<StakeProps> = ({ bank }) => {
   const [approveStatus, approve] = useApprove(bank.depositToken, bank.address);
-
   // TODO: reactive update of token balance
   const tokenBalance = useTokenBalance(bank.depositToken);
-  const stakedBalance = useStakedBalance(bank.contract);
+  const stakedBalance = useStakedBalance(bank);
 
   const { onStake } = useStake(bank);
   const { onWithdraw } = useWithdraw(bank);
@@ -62,6 +61,8 @@ const Stake: React.FC<StakeProps> = ({ bank }) => {
     />,
   );
 
+  const isLpWithUSDT = useMemo(() => bank.depositTokenName.includes('USDT') && bank.depositTokenName.includes('LP'), [bank])
+
   return (
     <Card>
       <CardContent>
@@ -70,7 +71,7 @@ const Stake: React.FC<StakeProps> = ({ bank }) => {
             <CardIcon>
               <TokenSymbol symbol={bank.depositToken.symbol} size={54} />
             </CardIcon>
-            <Value value={getDisplayBalance(stakedBalance, bank.depositToken.decimal)} />
+            <Value value={getDisplayBalance(stakedBalance, bank.depositToken.decimal, isLpWithUSDT ? 12 : 3)} />
             <Label text={`${bank.depositTokenName} Staked`} />
           </StyledCardHeader>
           <StyledCardActions>

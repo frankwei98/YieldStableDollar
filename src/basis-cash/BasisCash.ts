@@ -1,6 +1,6 @@
-import { Fetcher, Route, Token } from '@lychees/uniscam-sdk';
+import { Fetcher, Route, Token } from '@heshiswap/sdk';
 import { Configuration } from './config';
-import { ContractName, TokenStat, TreasuryAllocationTime } from './types';
+import { Bank, ContractName, TokenStat, TreasuryAllocationTime } from './types';
 import { BigNumber, Contract, ethers, Overrides, utils } from 'ethers';
 import { decimalToBalance } from './ether-utils';
 import { TransactionResponse } from '@ethersproject/providers';
@@ -46,7 +46,7 @@ export class BasisCash {
 
     // Uniswap V2 Pair
     this.bacDai = new Contract(
-      externalTokens['YSD_DAI-UNI-LPv2'][0],
+      externalTokens['YSD_USDT-UNI-LPv2'][0],
       IUniswapV2PairABI,
       provider,
     );
@@ -100,7 +100,7 @@ export class BasisCash {
   async getCashStatFromUniswap(): Promise<TokenStat> {
     const supply = await this.YSD.displayedTotalSupply();
     return {
-      priceInDAI: await this.getTokenPriceFromUniswap(this.YSD),
+      priceInBUSD: await this.getTokenPriceFromUniswap(this.YSD),
       totalSupply: supply,
     };
   }
@@ -110,24 +110,16 @@ export class BasisCash {
    * calculated by 1-day Time-Weight Averaged Price (TWAP).
    */
   async getCashStatInEstimatedTWAP(): Promise<TokenStat> {
-    const { Oracle } = this.contracts;
+    const { SeigniorageOracle } = this.contracts;
 
-    // estimate current TWAP price
-    const cumulativePrice: BigNumber = await this.bacDai.price0CumulativeLast();
-    const cumulativePriceLast = await Oracle.price0CumulativeLast();
-    const elapsedSec = Math.floor(Date.now() / 1000 - (await Oracle.blockTimestampLast()));
-
-    const denominator112 = BigNumber.from(2).pow(112);
-    const denominator1e18 = BigNumber.from(10).pow(18);
-    const cashPriceTWAP = cumulativePrice
-      .sub(cumulativePriceLast)
-      .mul(denominator1e18)
-      .div(elapsedSec)
-      .div(denominator112);
+    const expectedPrice = await SeigniorageOracle.expectedPrice(
+      this.YSD.address,
+      ethers.utils.parseEther('1'),
+    );
 
     const totalSupply = await this.YSD.displayedTotalSupply();
     return {
-      priceInDAI: getDisplayBalance(cashPriceTWAP),
+      priceInBUSD: getDisplayBalance(expectedPrice, 6),
       totalSupply,
     };
   }
@@ -149,14 +141,14 @@ export class BasisCash {
     const bondPrice = cashPrice.pow(2).div(decimals);
 
     return {
-      priceInDAI: getDisplayBalance(bondPrice),
+      priceInBUSD: getDisplayBalance(bondPrice, 6),
       totalSupply: await this.YSB.displayedTotalSupply(),
     };
   }
 
   async getShareStat(): Promise<TokenStat> {
     return {
-      priceInDAI: await this.getTokenPriceFromUniswap(this.YSS),
+      priceInBUSD: await this.getTokenPriceFromUniswap(this.YSS),
       totalSupply: await this.YSS.displayedTotalSupply(),
     };
   }
@@ -165,14 +157,14 @@ export class BasisCash {
     await this.provider.ready;
 
     const { chainId } = this.config;
-    const { DAI } = this.config.externalTokens;
-    const dai = new Token(chainId, DAI[0], 18);
+    const { USDT } = this.config.externalTokens;
+    const dai = new Token(chainId, USDT[0], USDT[1]);
     const token = new Token(chainId, tokenContract.address, 18);
 
     try {
       const daiToToken = await Fetcher.fetchPairData(dai, token, this.provider);
-      const priceInDAI = new Route([daiToToken], token);
-      return priceInDAI.midPrice.toSignificant(3);
+      const priceInBUSD = new Route([daiToToken], token);
+      return priceInBUSD.midPrice.toSignificant(3);
     } catch (err) {
       console.error(`Failed to fetch token price of ${tokenContract.symbol}: ${err}`);
     }
@@ -230,53 +222,116 @@ export class BasisCash {
     }
   }
 
-  async stakedBalanceOnBank(
-    poolName: ContractName,
-    account = this.myAccount,
-  ): Promise<BigNumber> {
-    const pool = this.contracts[poolName];
-    console.info('stakedBalanceOnBank::pool', pool);
-    console.info('stakedBalanceOnBank::account', account);
+  async stakedBalanceOnBank(bank: Bank, account = this.myAccount): Promise<BigNumber> {
+    const pool = this.contracts[bank.contract];
+    const isMultiPool = bank && bank.contract === 'YSDMultiPool';
+    console.info(
+      'stakedBalanceOnBank::poolName',
+      bank.contract,
+      'pool',
+      pool,
+      'account',
+      account,
+      'isMultiPool:',
+      isMultiPool,
+    );
     try {
+      if (isMultiPool) {
+        const balance = await pool.subBalanceOf(account, bank.depositToken.address);
+        console.info(
+          `stakedBalanceOnBank::subBalance token ${bank.depositToken.address} for ${account} is ${balance}`,
+        );
+        return balance;
+      }
       const balance = await pool.balanceOf(account);
       console.info(`stakedBalanceOnBank::balance for ${account} is ${balance}`);
       return balance;
     } catch (err) {
-      console.error(`Failed to call balanceOf() on pool ${pool.address}: ${err.stack}`);
+      if (pool === undefined) {
+        console.error(
+          `Failed to call balanceOf()/subBalanceOf(), pool undefined: ${err.stack}`,
+        );
+        return BigNumber.from(0);
+      }
+      console.error(
+        `Failed to call balanceOf()/subBalanceOf() on pool ${pool.address}: ${err.stack}`,
+      );
       return BigNumber.from(0);
     }
   }
 
   /**
    * Deposits token to given pool.
-   * @param poolName A name of pool contract.
+   * @param bank Bank info.
    * @param amount Number of tokens with decimals applied. (e.g. 1.45 DAI * 10^18)
    * @returns {string} Transaction hash
    */
-  async stake(poolName: ContractName, amount: BigNumber): Promise<TransactionResponse> {
-    const pool = this.contracts[poolName];
-    console.info('pool', pool);
+  async stake(bank: Bank, amount: BigNumber): Promise<TransactionResponse> {
+    const pool = this.contracts[bank.contract];
+    console.info('BasisCash::stake:pool', pool);
+    console.info('bank.contract', bank.contract)
+    const isMultiPool = bank && bank.contract === 'YSDMultiPool';
     try {
+      if (isMultiPool) {
+        console.info('isMultiPool')
+        const tokenAddress = bank.depositToken.address;
+        console.info(
+          'BasisCash::stake:depositToken',
+          tokenAddress,
+        );
+        const gas = await pool.estimateGas.stake(tokenAddress, amount);
+        console.info(
+          'BasisCash::stake:estimateGas',
+          gas,
+          'tokenAddress:',
+          tokenAddress,
+          'amount:',
+          amount,
+        );
+        return await pool.stake(tokenAddress, amount, this.gasOptions(gas));
+      }
       const gas = await pool.estimateGas.stake(amount);
-      console.info('estimateGas', gas);
+      console.info('BasisCash::stake:estimateGas', gas, 'amount:', amount);
       return await pool.stake(amount, this.gasOptions(gas));
     } catch (error) {
-      pool.callStatic.stake(amount).then((callError) => {
-        console.error('Error while staking, reason:' + callError.reason);
-        throw callError;
-      });
+      if (isMultiPool) {
+        pool.callStatic.stake(bank.depositToken.address, amount).then((callError) => {
+          console.error('Error while staking, reason:' + callError.reason);
+          throw callError;
+        });
+      } else {
+        pool.callStatic.stake(amount).then((callError) => {
+          console.error('Error while staking, reason:' + callError.reason);
+          throw callError;
+        });
+      }
     }
   }
 
   /**
    * Withdraws token from given pool.
-   * @param poolName A name of pool contract.
+   * @param bank Bank info.
    * @param amount Number of tokens with decimals applied. (e.g. 1.45 DAI * 10^18)
    * @returns {string} Transaction hash
    */
-  async unstake(poolName: ContractName, amount: BigNumber): Promise<TransactionResponse> {
-    const pool = this.contracts[poolName];
+  async unstake(bank: Bank, amount: BigNumber): Promise<TransactionResponse> {
+    const pool = this.contracts[bank.contract];
+    const isMultiPool = bank && bank.contract === 'YSDMultiPool';
+    if (isMultiPool) {
+      const tokenAddress = bank.depositToken.address;
+      const gas = await pool.estimateGas.withdraw(tokenAddress, amount);
+      console.info(
+        'BasisCash::unstake:estimateGas',
+        gas,
+        'tokenAddress:',
+        tokenAddress,
+        'amount:',
+        amount,
+      );
+      return await pool.withdraw(tokenAddress, amount, this.gasOptions(gas));
+    }
     const gas = await pool.estimateGas.withdraw(amount);
+    console.info('BasisCash::unstake:estimateGas', gas, 'amount:', amount);
     return await pool.withdraw(amount, this.gasOptions(gas));
   }
 
@@ -291,29 +346,45 @@ export class BasisCash {
 
   /**
    * Harvests and withdraws deposited tokens from the pool.
+   * @param bank Bank info.
    */
-  async exit(poolName: ContractName): Promise<TransactionResponse> {
-    const pool = this.contracts[poolName];
+  async exit(bank: Bank): Promise<TransactionResponse> {
+    const pool = this.contracts[bank.contract];
+    const isMultiPool = bank && bank.contract === 'YSDMultiPool';
+    if (isMultiPool) {
+      const tokenAddress = bank.depositToken.address;
+      const gas = await pool.estimateGas.exit(tokenAddress);
+      console.info('BasisCash::exit:estimateGas', gas, 'tokenAddress:', tokenAddress);
+      return await pool.exit(tokenAddress, this.gasOptions(gas));
+    }
     const gas = await pool.estimateGas.exit();
+    console.info('BasisCash::exit:estimateGas', gas);
     return await pool.exit(this.gasOptions(gas));
   }
 
   async fetchBoardroomVersionOfUser(): Promise<string> {
     const { Boardroom1, Boardroom2 } = this.contracts;
-    const balance1 = await Boardroom1.getShareOf(this.myAccount);
-    if (balance1.gt(0)) {
-      console.log(
-        `👀 The user is using Boardroom v1. (Staked ${getDisplayBalance(balance1)} YSS)`,
-      );
-      return 'v1';
+
+    if (Boardroom1) {
+      const balance1 = await Boardroom1.getShareOf(this.myAccount);
+      if (balance1.gt(0)) {
+        console.log(
+          `👀 The user is using Boardroom v1. (Staked ${getDisplayBalance(balance1)} YSS)`,
+        );
+        return 'v1';
+      }
     }
-    const balance2 = await Boardroom2.balanceOf(this.myAccount);
-    if (balance2.gt(0)) {
-      console.log(
-        `👀 The user is using Boardroom v2. (Staked ${getDisplayBalance(balance2)} YSS)`,
-      );
-      return 'v2';
+
+    if (Boardroom2) {
+      const balance2 = await Boardroom2.balanceOf(this.myAccount);
+      if (balance2.gt(0)) {
+        console.log(
+          `👀 The user is using Boardroom v2. (Staked ${getDisplayBalance(balance2)} YSS)`,
+        );
+        return 'v2';
+      }
     }
+
     return 'latest';
   }
 

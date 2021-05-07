@@ -50,7 +50,7 @@ const Stake: React.FC = () => {
         onStake(value);
         onDismissDeposit();
       }}
-      tokenName={'Basis Share'}
+      tokenName={'YSD Share'}
     />,
   );
 
@@ -61,7 +61,7 @@ const Stake: React.FC = () => {
         onWithdraw(value);
         onDismissWithdraw();
       }}
-      tokenName={'Basis Share'}
+      tokenName={'YSD Share'}
     />,
   );
 
@@ -72,15 +72,15 @@ const Stake: React.FC = () => {
           <CardIcon>
             <TokenSymbol symbol="YSS"/>
           </CardIcon>
-          <Value value={getDisplayBalance(stakedBalance)}/>
-          <Label text="Basis Share Staked"/>
+          <Value value={getDisplayBalance(stakedBalance, 18, 4)}/>
+          <Label text="YSD Share Staked"/>
         </StyledCardHeader>
         <StyledCardActions>
           {!isOldBoardroomMember && approveStatus !== ApprovalState.APPROVED ? (
             <Button
               disabled={approveStatus !== ApprovalState.NOT_APPROVED}
               onClick={approve}
-              text="Approve Basis Share"
+              text="Approve YSD Share"
             />
           ) : isOldBoardroomMember ? (
             <>
@@ -92,11 +92,11 @@ const Stake: React.FC = () => {
             </>
           ) : (
             <>
-              <IconButton onClick={onPresentWithdraw}>
+              <IconButton size={40} onClick={onPresentWithdraw}>
                 <RemoveIcon/>
               </IconButton>
               <StyledActionSpacer/>
-              <IconButton onClick={onPresentDeposit}>
+              <IconButton size={40} onClick={onPresentDeposit}>
                 <AddIcon/>
               </IconButton>
             </>
@@ -115,8 +115,10 @@ const StyledCardHeader = styled.div`
 const StyledCardActions = styled.div`
   display: flex;
   justify-content: center;
+  align-items: center;
   margin-top: ${(props) => props.theme.spacing[6]}px;
   width: 100%;
+  min-height: 56px;
   background-image: url(${buttonB});
   background-repeat : no-repeat;
   background-size: 100% 100%;

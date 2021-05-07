@@ -26,6 +26,7 @@ const HomeCard: React.FC<HomeCardProps> = ({
   stat,
 }) => {
   const tokenUrl = `${config.etherscanUrl}/address/${address}`;
+  const buyTokenUrl = `https://app.unisave.exchange/#/swap?inputCurrency=${config.externalTokens.USDT[0]}&outputCurrency=${address}`
   return (
     <Wrapper>
       <StyledCards>
@@ -33,7 +34,7 @@ const HomeCard: React.FC<HomeCardProps> = ({
         <CardHeader>{title}</CardHeader>
         <CardSection>
           {stat ? (
-            <StyledValue style={{padding: '0 22px', backgroundColor: '#000000'}}>{(stat.priceInDAI !== '-' ? '$' : '') + stat.priceInDAI}</StyledValue>
+            <StyledValue style={{padding: '0 22px', backgroundColor: '#000000'}}>{(stat.priceInBUSD !== '-' ? '$' : '') + stat.priceInBUSD}</StyledValue>
           ) : (
             <ValueSkeleton />
           )}
@@ -45,6 +46,10 @@ const HomeCard: React.FC<HomeCardProps> = ({
           <StyledSupplyLabel href={tokenUrl} target="_blank" color={color}>
             {supplyLabel}
           </StyledSupplyLabel>
+          { symbol !== 'YSB' && 
+            <StyledBuyLabel href={buyTokenUrl} target="_blank" color="#efd40d">
+            BUY {symbol} on Unisave
+          </StyledBuyLabel>}
         </CardSection>
       </StyledCards>
     </Wrapper>
@@ -54,6 +59,8 @@ const HomeCard: React.FC<HomeCardProps> = ({
 const Wrapper = styled.div`
   @media (max-width: 768px) {
     margin-top: ${(props) => props.theme.spacing[4]}px;
+    min-width: 240px;
+    min-height: 360px;
   }
 `;
 
@@ -65,16 +72,19 @@ const CardHeader = styled.h2`
 
 const StyledCards = styled.div`
   min-width: 200px;
+  height: 100%;
   padding: ${(props) => props.theme.spacing[5]}px ${(props) => props.theme.spacing[3]}px;
   color: ${(props) => props.theme.color.white};
   background-image: url(${pad});
   background-repeat : no-repeat;
   background-size: 100% 100%;
+  box-sizing: border-box;
   align-items: center;
   display: flex;
   flex-direction: column;
   @media (max-width: 768px) {
     width: 100%;
+    min-height: 360px;
   }
 `;
 
@@ -100,6 +110,11 @@ const ValueSkeletonPadding = styled.div`
 `;
 
 const StyledSupplyLabel = styled.a`
+  display: block;
+  color: ${(props) => props.color};
+`;
+
+const StyledBuyLabel = styled.a`
   display: block;
   color: ${(props) => props.color};
 `;
